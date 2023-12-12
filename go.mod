@@ -1,4 +1,4 @@
-module github.com/JhonatanMustiolaCas/go-tasks
+module github.com/jhonatanmustiolacas/go-tasks
 
 go 1.21.1
 

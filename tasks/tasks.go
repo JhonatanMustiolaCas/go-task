@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/fatih/color"
 	"github.com/rodaine/table"
 )
+
+const TASK_FILE_NAME string = "/tasks.json"
 
 type Task struct {
 	ID       int    `json:"id"`
@@ -18,7 +21,8 @@ type Task struct {
 	Date     string `json:"date"`
 }
 
-func ListTasks(tasks []Task) {
+func ListTasks(path string) {
+	tasks := getTasks(path)
 	if len(tasks) == 0 {
 		fmt.Println("There's no task yet")
 		return
@@ -33,49 +37,59 @@ func ListTasks(tasks []Task) {
 	for _, task := range tasks {
 
 		status := "☐"
-		if task.Complete == true {
+		if task.Complete {
 			status = "☑"
 		}
+
 		tbl.AddRow(task.ID, status, task.Name, task.Date)
 	}
 
 	tbl.Print()
 }
 
-func DeleteTask(tasks []Task, id int) []Task {
+func DeleteTask(id int, path string) {
+	tasks := getTasks(path)
 	for i, task := range tasks {
 		if task.ID == id {
-			return append(tasks[:i], tasks[i+1:]...)
+			tasks = append(tasks[:i], tasks[i+1:]...)
+			break
 		}
 	}
-	return tasks
+	saveTask(path, tasks)
 }
 
-func CompleteTask(tasks []Task, id int) []Task {
+func CompleteTask(id int, path string) {
+	tasks := getTasks(path)
 	for i, task := range tasks {
 		if task.ID == id {
 			tasks[i].Complete = !task.Complete
 			break
 		}
 	}
-	return tasks
+	saveTask(path, tasks)
 }
 
-func Addtask(tasks []Task, name string) []Task {
+func Addtask(name string, path string) {
 	date := time.Now()
-
+	tasks := getTasks(path)
 	newTask := Task{
-		ID:       GetNextID(tasks),
+		ID:       getNextID(tasks),
 		Name:     name,
 		Complete: false,
 		Date:     date.Format("2006-01-02 15:04:05"),
 	}
 
-	return append(tasks, newTask)
+	tasksUpdated := append(tasks, newTask)
+	saveTask(path, tasksUpdated)
 }
 
-func SaveTask(file *os.File, tasks []Task) {
+func saveTask(path string, tasks []Task) {
 	bytes, err := json.Marshal(tasks)
+	if err != nil {
+		panic(err)
+	}
+
+	file, err := os.OpenFile(path+TASK_FILE_NAME, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -101,9 +115,41 @@ func SaveTask(file *os.File, tasks []Task) {
 	}
 }
 
-func GetNextID(tasks []Task) int {
+func getNextID(tasks []Task) int {
 	if len(tasks) == 0 {
 		return 1
 	}
 	return tasks[len(tasks)-1].ID + 1
+}
+
+func getTasks(path string) []Task {
+	taskFile, err := os.OpenFile(path+TASK_FILE_NAME, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err)
+	}
+
+	defer taskFile.Close()
+
+	var tasks []Task
+
+	info, err := taskFile.Stat()
+	if err != nil {
+		panic(err)
+	}
+
+	if info.Size() != 0 {
+		bytes, err := io.ReadAll(taskFile)
+		if err != nil {
+			panic(err)
+		}
+
+		err = json.Unmarshal(bytes, &tasks)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		tasks = []Task{}
+	}
+
+	return tasks
 }
